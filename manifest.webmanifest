@@ -1,0 +1,13 @@
+{
+  "name":"Health Training PWA",
+  "short_name":"Health Training",
+  "start_url":"./",
+  "scope":"./",
+  "display":"standalone",
+  "background_color":"#05070b",
+  "theme_color":"#05070b",
+  "lang":"ko-KR",
+  "icons":[
+    {"src":"icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}
+  ]
+}
