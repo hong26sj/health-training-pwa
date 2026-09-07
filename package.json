@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test": "node tests/health-engine.test.mjs",
     "ios:prepare": "node scripts/prepare-web.mjs",
     "ios:add": "npm run ios:prepare && npx cap add ios",
     "ios:sync": "npm run ios:prepare && npx cap sync ios"
