@@ -1,0 +1,95 @@
+name: Build Apps in Toss AIT
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/build-ait.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-ait:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PWA source
+        uses: actions/checkout@v4
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Scaffold Apps in Toss project
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          npx create-ait-app@0.2.5 all-health-total --inline --pm npm --template vanilla
+
+      - name: Replace scaffold UI with current PWA
+        run: |
+          set -euo pipefail
+          AIT_DIR="$RUNNER_TEMP/all-health-total"
+          rm -rf "$AIT_DIR/js"
+          cp index.html "$AIT_DIR/index.html"
+          cp styles.css "$AIT_DIR/styles.css"
+          cp charts.css "$AIT_DIR/charts.css"
+          cp nutrition.css "$AIT_DIR/nutrition.css"
+          cp -R js "$AIT_DIR/js"
+          cp icon.svg "$AIT_DIR/icon.svg"
+          # Service worker / PWA manifest are not required inside Toss WebView.
+          python - <<'PY'
+          from pathlib import Path
+          p=Path(__import__('os').environ['RUNNER_TEMP'])/'all-health-total'/'index.html'
+          s=p.read_text(encoding='utf-8')
+          import re
+          s=re.sub(r'\s*<link[^>]+manifest[^>]*>\s*','\n',s,flags=re.I)
+          p.write_text(s,encoding='utf-8')
+          PY
+
+      - name: Configure Apps in Toss metadata
+        run: |
+          set -euo pipefail
+          AIT_DIR="$RUNNER_TEMP/all-health-total"
+          CFG="$AIT_DIR/apps-in-toss.config.ts"
+          test -f "$CFG"
+          python - <<'PY'
+          from pathlib import Path
+          import os,re
+          p=Path(os.environ['RUNNER_TEMP'])/'all-health-total'/'apps-in-toss.config.ts'
+          s=p.read_text(encoding='utf-8')
+          s=re.sub(r"appName:\s*['\"][^'\"]+['\"]", "appName: 'all-health-total'", s)
+          s=re.sub(r"displayName:\s*['\"][^'\"]+['\"]", "displayName: '올인헬스'", s)
+          s=re.sub(r"primaryColor:\s*['\"][^'\"]+['\"]", "primaryColor: '#111318'", s)
+          # Use a stable HTTPS icon URL that already exists with the PWA.
+          s=re.sub(r"icon:\s*['\"][^'\"]+['\"]", "icon: 'https://hong26sj.github.io/health-training-pwa/icon.svg'", s)
+          p.write_text(s,encoding='utf-8')
+          print(s)
+          PY
+
+      - name: Build AIT bundle
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/all-health-total"
+          npm run build
+          echo "Generated files:"
+          find . -maxdepth 3 -type f -name '*.ait' -print -ls
+
+      - name: Collect AIT artifact
+        run: |
+          set -euo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/ait-artifact"
+          AIT_FILE=$(find "$RUNNER_TEMP/all-health-total" -type f -name '*.ait' | head -n 1)
+          test -n "$AIT_FILE"
+          cp "$AIT_FILE" "$GITHUB_WORKSPACE/ait-artifact/all-health-total.ait"
+          ls -lh "$GITHUB_WORKSPACE/ait-artifact/all-health-total.ait"
+
+      - name: Upload AIT artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: all-health-total-ait
+          path: ait-artifact/all-health-total.ait
+          if-no-files-found: error
+          retention-days: 30
